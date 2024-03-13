@@ -2,6 +2,18 @@ import { describe, it, expect } from "vitest";
 import { Chemist } from "../src/chemist";
 
 const c = new Chemist();
+
+describe("default behavior", () => {
+  it("should return early on empty params", () => {
+    expect(c.formulate({})).toBe('');
+  });
+
+  it("should throw error on unknown schema", () => {
+    // @ts-ignore deliberate
+    expect(() => c.formulate({ z: { z: true }})).toThrowError();
+  })
+})
+
 describe("match filter", () => {
   it("should accept string", () => {
     expect(c.formulate({ RecordId: "ID" })).toBe('{RecordId}="ID"');
@@ -136,7 +148,67 @@ describe("multiple match filter", () => {
   });
 });
 
-describe("escaping behavior", () => {
+describe("NOT only filter", () => {
+  it("should accept string", () => {
+    expect(c.formulate({ NOT: { RecordId: "ID" } })).toBe('NOT({RecordId}="ID")');
+  })
+
+  it("should accept number", () => {
+    expect(c.formulate({ NOT: { RecordId: 1 } })).toBe('NOT({RecordId}="1")');
+  })
+
+  it("should accept null value", () => {
+    expect(c.formulate({ NOT: { RecordId: null } })).toBe('NOT({RecordId}=BLANK())');
+  })
+
+  it("should accept empty string", () => {
+    expect(c.formulate({ NOT: { RecordId: "" } })).toBe('NOT({RecordId}=BLANK())');
+  })
+
+  it("should accept (string|number)[]", () => {
+    expect(c.formulate({NOT: {RecordId: ["ID1", 1]}})).toBe(
+        'NOT(OR({RecordId}="ID1",{RecordId}="1"))',
+    )
+  });
+
+  it("should accept mixed fields filter", () => {
+    expect(c.formulate({ NOT: { RecordId: "ID", OtherId: ["ID", "ID2"]  }})).toBe(
+        'NOT(AND({RecordId}="ID",OR({OtherId}="ID",{OtherId}="ID2")))',
+    );
+  });
+})
+
+describe("OR only filter", () => {
+  it("should accept one filters", () => {
+    expect(c.formulate({ OR: [
+        { OtherId: ["ID", "ID2"]}
+      ]})).toBe('OR({OtherId}="ID",{OtherId}="ID2")')
+  })
+
+  it("should accept multiple filters", () => {
+    expect(c.formulate({ OR: [
+        { RecordId: "ID"},
+        { OtherId: ["ID", "ID2"]}
+      ]})).toBe('OR({RecordId}="ID",OR({OtherId}="ID",{OtherId}="ID2"))')
+  })
+})
+
+describe("OR and NOT filters", () => {
+  it("should accept both filters", () => {
+    expect(c.formulate({
+      OR: [
+        { RecordID: [1,2] },
+        { OtherID: 1 }
+      ],
+      NOT: {
+        RecordID: 1,
+        OtherID: 1
+      }
+    })).toBe('AND(OR(OR({RecordID}="1",{RecordID}="2"),{OtherID}="1"),NOT(AND({RecordID}="1",{OtherID}="1")))')
+  });
+});
+
+describe("value escape behavior", () => {
   it("should allow explicit escape", () => {
     expect(c.formulate({ '"RecordId"': '"Id"' })).toBe('{"RecordId"}=""Id""');
   });
